@@ -48,11 +48,20 @@ async function initializeDatabase() {
 app.post('/api/properties', async (req, res) => {
   try {
     const { transaction_hash, block_number, property_id, location, area, owner, timestamp } = req.body;
+    console.log('Received property record:', { transaction_hash, block_number, property_id, location, area, owner, timestamp });
+    
+    // Convert ISO timestamp to MySQL datetime format
+    const mysqlTimestamp = new Date(timestamp).toISOString().slice(0, 19).replace('T', ' ');
+    
     const connection = await pool.getConnection();
-    await connection.query(
+    console.log('Database connection established');
+    
+    const [result] = await connection.query(
       'INSERT INTO property_records (transaction_hash, block_number, property_id, location, area, owner, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [transaction_hash, block_number, property_id, location, area, owner, timestamp]
+      [transaction_hash, block_number, property_id, location, area, owner, mysqlTimestamp]
     );
+    console.log('Insert result:', result);
+    
     connection.release();
     res.status(201).json({ message: 'Property record created successfully' });
   } catch (error) {

@@ -12,14 +12,6 @@ declare global {
   }
 }
 
-interface Property {
-  id: number;
-  location: string;
-  area: number;
-  owner: string;
-  isVerified: boolean;
-}
-
 interface TransactionDetails {
   hash: string;
   timestamp: string;
@@ -29,10 +21,11 @@ interface TransactionDetails {
   location?: string;
   area?: number;
   owner?: string;
+  newOwner?: string;
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'register' | 'verify' | 'records'>('register');
+  const [activeTab, setActiveTab] = useState<'register' | 'records' | 'transfer'>('register');
   const [account, setAccount] = useState<string>('');
   const [contract, setContract] = useState<ethers.Contract | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,8 +36,10 @@ function App() {
   const [location, setLocation] = useState('');
   const [area, setArea] = useState('');
   const [owner, setOwner] = useState('');
-  const [searchId, setSearchId] = useState('');
-  const [propertyDetails, setPropertyDetails] = useState<Property | null>(null);
+  
+  // Transfer form state
+  const [transferPropertyId, setTransferPropertyId] = useState('');
+  const [newOwner, setNewOwner] = useState('');
 
   useEffect(() => {
     // Initialize database table
@@ -62,6 +57,11 @@ function App() {
           location: decodedData.args[1],
           area: decodedData.args[2].toString(),
           owner: decodedData.args[3]
+        };
+      } else if (decodedData?.name === 'transferOwnership') {
+        return {
+          propertyId: decodedData.args[0].toString(),
+          newOwner: decodedData.args[1]
         };
       }
       return null;
@@ -136,31 +136,35 @@ function App() {
     }
   };
 
-  const verifyProperty = async () => {
+  const transferProperty = async () => {
     if (!contract) {
       setError("Contract not connected. Please connect your wallet first.");
       return;
     }
 
-    if (!searchId) {
-      setError("Please enter a property ID to verify");
+    if (!transferPropertyId || !newOwner) {
+      setError("Please fill in all fields");
       return;
     }
 
     try {
       setIsLoading(true);
-      const property = await contract.properties(parseInt(searchId));
-      setPropertyDetails({
-        id: property.id.toNumber(),
-        location: property.location,
-        area: property.area.toNumber(),
-        owner: property.owner,
-        isVerified: true
-      });
+      const tx = await contract.transferOwnership(
+        parseInt(transferPropertyId),
+        newOwner
+      );
+      await tx.wait();
       setError('');
+      
+      // Fetch transaction details
+      await fetchTransactionDetails(tx.hash);
+      
+      alert("Property ownership successfully transferred!");
+      // Clear form
+      setTransferPropertyId('');
+      setNewOwner('');
     } catch (err) {
-      setError("Property not found or error occurred while verifying");
-      setPropertyDetails(null);
+      setError("Failed to transfer property. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -188,16 +192,17 @@ function App() {
           blockNumber: parseInt(data.result.blockNumber, 16).toString(),
           ...(decodedData && {
             propertyId: parseInt(decodedData.propertyId),
-            location: decodedData.location,
-            area: parseInt(decodedData.area),
-            owner: decodedData.owner
+            ...(decodedData.location && { location: decodedData.location }),
+            ...(decodedData.area && { area: parseInt(decodedData.area) }),
+            ...(decodedData.owner && { owner: decodedData.owner }),
+            ...(decodedData.newOwner && { newOwner: decodedData.newOwner })
           })
         };
 
         setTransactionDetails(transactionDetails);
 
-        // Save to database if we have property details
-        if (decodedData) {
+        // Save to database if we have property details from registration
+        if (decodedData && decodedData.location) {
           const record: PropertyRecord = {
             transaction_hash: txHash,
             block_number: transactionDetails.blockNumber,
@@ -247,10 +252,10 @@ function App() {
           Register Property
         </button>
         <button 
-          className={`tab-button ${activeTab === 'verify' ? 'active' : ''}`}
-          onClick={() => setActiveTab('verify')}
+          className={`tab-button ${activeTab === 'transfer' ? 'active' : ''}`}
+          onClick={() => setActiveTab('transfer')}
         >
-          Verify Property
+          Transfer Property
         </button>
         <button 
           className={`tab-button ${activeTab === 'records' ? 'active' : ''}`}
@@ -331,34 +336,56 @@ function App() {
           </section>
         )}
 
-        {activeTab === 'verify' && (
-          <section className="verification-section">
-            <h2>Verify Property</h2>
+        {activeTab === 'transfer' && (
+          <section className="property-section">
+            <h2>Transfer Property Ownership</h2>
             <div className="form-group">
               <input 
                 type="number"
-                placeholder="Enter Property ID" 
-                value={searchId}
-                onChange={e => setSearchId(e.target.value)}
+                placeholder="Property ID" 
+                value={transferPropertyId}
+                onChange={e => setTransferPropertyId(e.target.value)}
+                className="form-input"
+              />
+              <input 
+                placeholder="New Owner Address" 
+                value={newOwner}
+                onChange={e => setNewOwner(e.target.value)}
                 className="form-input"
               />
               <button 
-                className="verify-button"
-                onClick={verifyProperty}
+                className="submit-button"
+                onClick={transferProperty}
                 disabled={isLoading}
               >
-                {isLoading ? 'Verifying...' : 'Verify Property'}
+                {isLoading ? 'Transferring...' : 'Transfer Ownership'}
               </button>
             </div>
 
-            {propertyDetails && (
-              <div className="property-details">
-                <h3>Property Details</h3>
-                <p><strong>ID:</strong> {propertyDetails.id}</p>
-                <p><strong>Location:</strong> {propertyDetails.location}</p>
-                <p><strong>Area:</strong> {propertyDetails.area} sq ft</p>
-                <p><strong>Owner:</strong> {propertyDetails.owner}</p>
-                <p><strong>Status:</strong> Verified on Blockchain</p>
+            {transactionDetails && (
+              <div className="transaction-details">
+                <h3>Transaction Details</h3>
+                <p><strong>Transaction Hash:</strong> {transactionDetails.hash}</p>
+                <p><strong>Block Number:</strong> {transactionDetails.blockNumber}</p>
+                <p><strong>Timestamp:</strong> {transactionDetails.timestamp}</p>
+                <p><strong>Status:</strong> {transactionDetails.status}</p>
+                
+                {transactionDetails.propertyId && (
+                  <div className="property-info">
+                    <h4>Transfer Information</h4>
+                    <p><strong>Property ID:</strong> {transactionDetails.propertyId}</p>
+                    <p><strong>New Owner:</strong> {transactionDetails.newOwner}</p>
+                  </div>
+                )}
+                
+                <a 
+                  href={`https://sepolia.etherscan.io/tx/${transactionDetails.hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="etherscan-link"
+                >
+                  View on Etherscan
+                </a>
               </div>
             )}
           </section>

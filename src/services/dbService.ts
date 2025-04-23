@@ -19,6 +19,8 @@ export const createTable = async () => {
 
 export const insertPropertyRecord = async (record: PropertyRecord) => {
   try {
+    console.log('Sending property record to API:', record);
+    
     const response = await fetch(`${API_BASE_URL}/properties`, {
       method: 'POST',
       headers: {
@@ -28,10 +30,14 @@ export const insertPropertyRecord = async (record: PropertyRecord) => {
     });
 
     if (!response.ok) {
+      const errorData = await response.json();
+      console.error('API Error:', errorData);
       throw new Error('Failed to insert property record');
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('API Response:', result);
+    return result;
   } catch (error) {
     console.error('Error inserting record:', error);
     throw error;
