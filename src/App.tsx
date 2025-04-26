@@ -92,6 +92,7 @@ function App() {
       setContract(landContract);
       setError('');
     } catch (err) {
+      console.log(err);
       setError("Failed to connect wallet. Please try again.");
     } finally {
       setIsLoading(false);
@@ -130,6 +131,7 @@ function App() {
       setArea('');
       setOwner('');
     } catch (err) {
+      console.log(err)
       setError("Failed to register property. Please try again.");
     } finally {
       setIsLoading(false);

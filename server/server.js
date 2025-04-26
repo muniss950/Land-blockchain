@@ -12,8 +12,8 @@ app.use(express.json());
 // Database configuration
 const pool = mysql.createPool({
   host: 'localhost',
-  user: 'land_registry',
-  password: 'land_registry123',
+  user: 'root',
+  password: '12345',
   database: 'land_registry',
   waitForConnections: true,
   connectionLimit: 10,
